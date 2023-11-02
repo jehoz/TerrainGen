@@ -19,10 +19,10 @@ pub fn main() !void {
 
     // Set up 3D camera
     var camera: rl.Camera = .{
-        .position = .{ .x = 18.0, .y = 21.0, .z = 18.0 },
+        .position = .{ .x = 18, .y = 21, .z = 18 },
         .target = .{ .x = 0, .y = 0, .z = 0 },
-        .up = .{ .x = 0, .y = 1.0, .z = 0 },
-        .fovy = 45.0,
+        .up = .{ .x = 0, .y = 1, .z = 0 },
+        .fovy = 45,
         .projection = rl.CAMERA_PERSPECTIVE,
     };
 
@@ -57,34 +57,20 @@ pub fn main() !void {
     }
 }
 
-fn genHeightmap(width: c_int, height: c_int) !rl.Image {
+fn genHeightmap(width: usize, height: usize) !rl.Image {
     var noise = fnl.fnlCreateState();
     noise.noise_type = fnl.FNL_NOISE_OPENSIMPLEX2;
     noise.fractal_type = fnl.FNL_FRACTAL_RIDGED;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var terrain = try Terrain.init(
-        @intCast(width),
-        @intCast(height),
+        width,
+        height,
         gpa.allocator(),
     );
     defer terrain.deinit();
 
     terrain.fillNoise(&noise);
 
-    var heightmap = rl.GenImageColor(width, height, rl.BLACK);
-
-    for (terrain.elevation, 0..) |row, y| {
-        for (row, 0..) |cell, x| {
-            var z: u8 = @intFromFloat(cell * 255);
-            rl.ImageDrawPixel(
-                &heightmap,
-                @intCast(x),
-                @intCast(y),
-                rl.Color{ .r = z, .g = z, .b = z, .a = 255 },
-            );
-        }
-    }
-
-    return heightmap;
+    return terrain.renderElevation();
 }

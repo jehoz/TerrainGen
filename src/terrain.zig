@@ -39,4 +39,25 @@ pub const Terrain = struct {
             }
         }
     }
+
+    pub fn renderElevation(self: Terrain) rl.Image {
+        const height: c_int = @intCast(self.elevation.len);
+        const width: c_int = @intCast(self.elevation.len);
+        var img = rl.GenImageColor(width, height, rl.BLACK);
+
+        for (self.elevation, 0..) |row, y| {
+            for (row, 0..) |cell, x| {
+                const z: u8 = @intFromFloat(cell * 255);
+                const color = rl.Color{
+                    .r = z,
+                    .g = z,
+                    .b = z,
+                    .a = 255,
+                };
+                rl.ImageDrawPixel(&img, @intCast(x), @intCast(y), color);
+            }
+        }
+
+        return img;
+    }
 };
