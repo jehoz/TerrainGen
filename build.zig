@@ -1,5 +1,6 @@
 const std = @import("std");
 const raylib_build = @import("libs/raylib/src/build.zig");
+const fnl_build = @import("libs/FastNoiseLite/build.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -15,9 +16,15 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    // add raylib
     const raylib = raylib_build.addRaylib(b, target, optimize, .{});
     exe.addIncludePath(.{ .path = "libs/raylib/src" });
     exe.linkLibrary(raylib);
+
+    // add fastnoiselite
+    const fnl = fnl_build.addFastNoiseLite(b, target, optimize);
+    exe.addIncludePath(.{ .path = "libs/FastNoiseLite/src" });
+    exe.linkLibrary(fnl);
 
     const run_cmd = b.addRunArtifact(exe);
 
