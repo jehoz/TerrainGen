@@ -7,6 +7,7 @@ const fnl = @cImport({
 });
 
 const Terrain = @import("terrain.zig").Terrain;
+const HydraulicErosion = @import("hydraulic_erosion.zig");
 
 pub fn main() !void {
     const screenWidth: c_int = 800;
@@ -33,7 +34,7 @@ pub fn main() !void {
     const heightmap_tex = rl.LoadTextureFromImage(heightmap);
     defer rl.UnloadTexture(heightmap_tex);
 
-    const mesh = rl.GenMeshHeightmap(heightmap, .{ .x = 16, .y = 8, .z = 16 });
+    const mesh = rl.GenMeshHeightmap(heightmap, .{ .x = 16, .y = 4, .z = 16 });
 
     var model = rl.LoadModelFromMesh(mesh);
     defer rl.UnloadModel(model);
@@ -71,6 +72,7 @@ fn genHeightmap(width: usize, height: usize) !rl.Image {
     defer terrain.deinit();
 
     terrain.fillNoise(&noise);
+    HydraulicErosion.erodeTerrain(&terrain, .{ .iterations = 150_000 });
 
     return terrain.renderElevation();
 }
