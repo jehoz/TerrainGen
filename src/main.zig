@@ -13,10 +13,10 @@ const Terrain = @import("terrain.zig").Terrain;
 const HydraulicErosion = @import("hydraulic_erosion.zig");
 
 pub fn main() !void {
-    const screenWidth: c_int = 800;
-    const screenHeight: c_int = 600;
+    const screen_width: c_int = 800;
+    const screen_height: c_int = 600;
 
-    rl.InitWindow(screenWidth, screenHeight, "Terrain Generator");
+    rl.InitWindow(screen_width, screen_height, "Terrain Generator");
     defer rl.CloseWindow();
 
     rl.SetTargetFPS(60);
@@ -46,6 +46,13 @@ pub fn main() !void {
         rl.BeginMode3D(camera);
         scene.render();
         rl.EndMode3D();
+
+        rl.DrawTexture(
+            scene.texture,
+            screen_width - scene.texture.width - 20,
+            20,
+            rl.WHITE,
+        );
 
         rl.DrawText(
             rl.TextFormat("Erosion Iterations: %d", scene.erosion_iters),
@@ -109,8 +116,6 @@ const TerrainScene = struct {
         self.terrain.deinit();
         std.debug.print("Unloading model\n", .{});
         rl.UnloadModel(self.model);
-        std.debug.print("Unloading mesh\n", .{});
-        rl.UnloadMesh(self.mesh);
         std.debug.print("Unloading texture\n", .{});
         rl.UnloadTexture(self.texture);
     }
@@ -134,9 +139,13 @@ const TerrainScene = struct {
         const heightmap = self.terrain.renderElevation();
         defer rl.UnloadImage(heightmap);
 
+        rl.UnloadTexture(self.texture);
         self.texture = rl.LoadTextureFromImage(heightmap);
+
+        rl.UnloadModel(self.model);
         self.mesh = rl.GenMeshHeightmap(heightmap, .{ .x = 16, .y = 4, .z = 16 });
         self.model = rl.LoadModelFromMesh(self.mesh);
+
         self.model.materials[0].maps[rl.MATERIAL_MAP_DIFFUSE].texture = self.texture;
     }
 
