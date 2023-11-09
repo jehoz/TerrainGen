@@ -8,15 +8,14 @@ const fnl = @cImport({
 
 pub const Terrain = struct {
     elevation: [][]f32,
-    arena_allocator: std.heap.ArenaAllocator,
 
-    pub fn init(width: usize, height: usize, child_allocator: std.mem.Allocator) !Terrain {
+    allocator: std.mem.Allocator,
+
+    pub fn init(width: usize, height: usize, allocator: std.mem.Allocator) !Terrain {
         var t = Terrain{
             .elevation = undefined,
-            .arena_allocator = std.heap.ArenaAllocator.init(child_allocator),
+            .allocator = allocator,
         };
-
-        const allocator = t.arena_allocator.allocator();
 
         t.elevation = try allocator.alloc([]f32, height);
         for (t.elevation) |*row| {
@@ -26,8 +25,12 @@ pub const Terrain = struct {
         return t;
     }
 
-    pub fn deinit(self: Terrain) void {
-        self.arena_allocator.deinit();
+    pub fn deinit(self: *Terrain) void {
+        for (self.elevation) |*row| {
+            self.allocator.free(row.*);
+        }
+        self.allocator.free(self.elevation);
+        self.* = undefined;
     }
 
     pub fn fillNoise(self: *Terrain, noise: *fnl.fnl_state) void {
