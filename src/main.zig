@@ -47,13 +47,6 @@ pub fn main() !void {
         scene.render();
         rl.EndMode3D();
 
-        rl.DrawTexture(
-            scene.texture,
-            screen_width - scene.texture.width - 20,
-            20,
-            rl.WHITE,
-        );
-
         rl.DrawText(
             rl.TextFormat("Erosion Iterations: %d", scene.erosion_iters),
             20,
@@ -67,12 +60,12 @@ pub fn main() !void {
 const TerrainScene = struct {
     terrain: Terrain,
     erosion_iters: u32 = 0,
-    max_erosion_iters: u32 = 200_000,
+    max_erosion_iters: u32 = 100_000,
 
     texture: rl.Texture,
-    mesh: rl.Mesh,
     model: rl.Model,
     model_pos: rl.Vector3,
+    shader: rl.Shader,
 
     allocator: std.mem.Allocator,
 
@@ -97,14 +90,25 @@ const TerrainScene = struct {
         defer rl.UnloadImage(heightmap);
 
         var tex = rl.LoadTextureFromImage(heightmap);
-        var mesh = rl.GenMeshHeightmap(heightmap, .{ .x = 16, .y = 4, .z = 16 });
+        // generating the mesh this way because GenMeshPlane adds weird extra
+        // geometry... might be a bug
+        var mesh = rl.GenMeshHeightmap(
+            rl.GenImageColor(@intCast(width), @intCast(height), rl.BLACK),
+            .{ .x = 16, .y = 1, .z = 16 },
+        );
         var model = rl.LoadModelFromMesh(mesh);
+
+        var shader = rl.LoadShader(
+            "src/shaders/heightmap.vert",
+            "src/shaders/heightmap.frag",
+        );
+        model.materials[0].shader = shader;
         model.materials[0].maps[rl.MATERIAL_MAP_DIFFUSE].texture = tex;
 
         return .{
             .terrain = terrain,
             .texture = tex,
-            .mesh = mesh,
+            .shader = shader,
             .model = model,
             .model_pos = .{ .x = -8, .y = 0, .z = -8 },
             .allocator = allocator,
@@ -116,16 +120,17 @@ const TerrainScene = struct {
         self.terrain.deinit();
         std.debug.print("Unloading model\n", .{});
         rl.UnloadModel(self.model);
+        std.debug.print("Unloading shader\n", .{});
+        rl.UnloadShader(self.shader);
         std.debug.print("Unloading texture\n", .{});
         rl.UnloadTexture(self.texture);
     }
 
     pub fn update(self: *TerrainScene) void {
-        if (self.erosion_iters < self.max_erosion_iters) {
-            self.erosion_iters += 1000;
-        } else {
+        if (self.erosion_iters >= self.max_erosion_iters) {
             return;
         }
+
         HydraulicErosion.erodeTerrain(&self.terrain, .{
             .iterations = 1000,
             .inertia = 0.05,
@@ -135,16 +140,14 @@ const TerrainScene = struct {
             .sediment_capacity = 10,
             .gravity = 10,
         });
+        self.erosion_iters += 1000;
 
-        const heightmap = self.terrain.renderElevation();
+        var heightmap = self.terrain.renderElevation();
+        rl.ImageBlurGaussian(&heightmap, 1);
         defer rl.UnloadImage(heightmap);
 
         rl.UnloadTexture(self.texture);
         self.texture = rl.LoadTextureFromImage(heightmap);
-
-        rl.UnloadModel(self.model);
-        self.mesh = rl.GenMeshHeightmap(heightmap, .{ .x = 16, .y = 4, .z = 16 });
-        self.model = rl.LoadModelFromMesh(self.mesh);
 
         self.model.materials[0].maps[rl.MATERIAL_MAP_DIFFUSE].texture = self.texture;
     }
