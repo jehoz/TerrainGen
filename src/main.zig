@@ -10,7 +10,6 @@ const fnl = @cImport({
 });
 
 const Terrain = @import("terrain.zig").Terrain;
-const HydraulicErosion = @import("hydraulic_erosion.zig");
 
 pub fn main() !void {
     const screen_width: c_int = 800;
@@ -48,19 +47,18 @@ pub fn main() !void {
         rl.EndMode3D();
 
         rl.DrawText(
-            rl.TextFormat("Erosion Iterations: %d", scene.erosion_iters),
+            rl.TextFormat("Erosion Iterations: %d", scene.terrain.erosion_iters),
             20,
             20,
             20,
             rl.LIGHTGRAY,
         );
+        rl.DrawFPS(20, 40);
     }
 }
 
 const TerrainScene = struct {
-    terrain: Terrain,
-    erosion_iters: u32 = 0,
-    max_erosion_iters: u32 = 100_000,
+    terrain: *Terrain,
 
     texture: rl.Texture,
     model: rl.Model,
@@ -79,7 +77,8 @@ const TerrainScene = struct {
         noise.fractal_type = fnl.FNL_FRACTAL_RIDGED;
         noise.frequency = 0.01 / (@as(f32, @floatFromInt(width)) / 128);
 
-        var terrain = try Terrain.init(
+        var terrain = try allocator.create(Terrain);
+        terrain.* = try Terrain.init(
             width,
             height,
             allocator,
@@ -105,7 +104,7 @@ const TerrainScene = struct {
         model.materials[0].shader = shader;
         model.materials[0].maps[rl.MATERIAL_MAP_DIFFUSE].texture = tex;
 
-        return .{
+        var scn = .{
             .terrain = terrain,
             .texture = tex,
             .shader = shader,
@@ -113,11 +112,32 @@ const TerrainScene = struct {
             .model_pos = .{ .x = -8, .y = 0, .z = -8 },
             .allocator = allocator,
         };
+
+        var hnd = try std.Thread.spawn(
+            .{ .allocator = allocator },
+            Terrain.erode,
+            .{
+                scn.terrain,
+                .{
+                    .iterations = 200_000,
+                    .inertia = 0.05,
+                    .erosion_rate = 0.05,
+                    .deposition_rate = 0.5,
+                    .evaporation_rate = 0.02,
+                    .sediment_capacity = 10,
+                    .gravity = 10,
+                },
+            },
+        );
+        hnd.detach();
+
+        return scn;
     }
 
     pub fn deinit(self: *TerrainScene) void {
         std.debug.print("Unloading terrain\n", .{});
         self.terrain.deinit();
+        self.allocator.destroy(self.terrain);
         std.debug.print("Unloading model\n", .{});
         rl.UnloadModel(self.model);
         std.debug.print("Unloading shader\n", .{});
@@ -127,23 +147,7 @@ const TerrainScene = struct {
     }
 
     pub fn update(self: *TerrainScene) void {
-        if (self.erosion_iters >= self.max_erosion_iters) {
-            return;
-        }
-
-        HydraulicErosion.erodeTerrain(&self.terrain, .{
-            .iterations = 1000,
-            .inertia = 0.05,
-            .erosion_rate = 0.05,
-            .deposition_rate = 0.5,
-            .evaporation_rate = 0.02,
-            .sediment_capacity = 10,
-            .gravity = 10,
-        });
-        self.erosion_iters += 1000;
-
         var heightmap = self.terrain.renderElevation();
-        rl.ImageBlurGaussian(&heightmap, 1);
         defer rl.UnloadImage(heightmap);
 
         rl.UnloadTexture(self.texture);
