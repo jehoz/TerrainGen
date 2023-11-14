@@ -1,5 +1,5 @@
 const std = @import("std");
-const Vector2 = @import("vector.zig").Vector2;
+const Vector2 = @import("vectors.zig").Vector2;
 
 pub const ScalarField = Field(f32);
 

@@ -7,7 +7,7 @@ const fnl = @cImport({
     @cInclude("FastNoiseLite.h");
 });
 
-const vectors = @import("vector.zig");
+const vectors = @import("vectors.zig");
 const Vector2 = vectors.Vector2;
 
 const ScalarField = @import("fields.zig").ScalarField;
