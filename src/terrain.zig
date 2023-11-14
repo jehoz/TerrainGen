@@ -9,10 +9,11 @@ const fnl = @cImport({
 
 const vectors = @import("vectors.zig");
 const Vector2 = vectors.Vector2;
-const CellOffset2 = vectors.CellOffset2;
+
+const MeshGrid = @import("mesh_grid.zig").MeshGrid;
 
 pub const Terrain = struct {
-    _elevation: []f32,
+    elevation: MeshGrid(f32),
     width: usize,
     height: usize,
     erosion_iters: i32 = 0,
@@ -20,34 +21,17 @@ pub const Terrain = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(width: usize, height: usize, allocator: std.mem.Allocator) !Terrain {
-        var t = Terrain{
-            ._elevation = undefined,
+        return .{
+            .elevation = try MeshGrid(f32).init(width, height, allocator),
             .width = width,
             .height = height,
             .allocator = allocator,
         };
-
-        t._elevation = try allocator.alloc(f32, width * height);
-        return t;
     }
 
     pub fn deinit(self: *Terrain) void {
-        self.allocator.free(self._elevation);
+        self.elevation.deinit();
         self.* = undefined;
-    }
-
-    pub inline fn getElevation(self: Terrain, x: usize, y: usize) f32 {
-        if (x >= self.width or y >= self.height) {
-            std.debug.panic("Index out of bounds: x={} y={}\n", .{ x, y });
-        }
-        return self._elevation[y * self.width + x];
-    }
-
-    pub inline fn setElevation(self: *Terrain, x: usize, y: usize, val: f32) void {
-        if (x >= self.width or y >= self.height) {
-            std.debug.panic("Index out of bounds: x={} y={}\n", .{ x, y });
-        }
-        self._elevation[y * self.width + x] = val;
     }
 
     pub fn fillNoise(self: *Terrain, noise: *fnl.fnl_state) void {
@@ -59,7 +43,7 @@ pub const Terrain = struct {
                     @floatFromInt(y),
                 );
                 // remap range from [-1, 1] to [0, 1]
-                self.setElevation(x, y, (noise_val + 1) / 2);
+                self.elevation.setCell(x, y, (noise_val + 1) / 2);
             }
         }
     }
@@ -73,7 +57,7 @@ pub const Terrain = struct {
 
         for (0..self.height) |y| {
             for (0..self.width) |x| {
-                const raw_elev = self.getElevation(x, y);
+                const raw_elev = self.elevation.getCell(x, y);
                 const z: u8 = @intFromFloat(std.math.clamp(raw_elev, 0, 1) * 255);
                 const color = rl.Color{
                     .r = z,
@@ -103,9 +87,8 @@ pub const Terrain = struct {
                 // save initial position for later
                 const pos_initial = drop.position;
 
-                const eg_result = self.elevgrad(drop.position);
-                const initial_elev = eg_result.elevation;
-                const gradient = eg_result.gradient;
+                const initial_elev = self.elevation.get(drop.position);
+                const gradient = self.elevation.gradient(drop.position);
 
                 drop.direction = drop.direction
                     .scale(opts.inertia)
@@ -125,7 +108,7 @@ pub const Terrain = struct {
                 }
 
                 // compute change in elevation
-                const final_elev = self.elevgrad(drop.position).elevation;
+                const final_elev = self.elevation.get(drop.position);
                 const delta_elev = final_elev - initial_elev;
 
                 // maximum sediment higher when moving fast downhill or large volume
@@ -149,7 +132,7 @@ pub const Terrain = struct {
                     );
                 }
                 drop.sediment -= delta_sed;
-                self.modifyElevation(pos_initial, delta_sed);
+                self.elevation.modify(pos_initial, delta_sed);
 
                 // update water particle's speed and volume
                 drop.speed = @sqrt(
@@ -168,65 +151,6 @@ pub const Terrain = struct {
             }
             self.erosion_iters += 1;
         }
-    }
-
-    const elevgrad_result = struct { elevation: f32, gradient: Vector2 };
-
-    /// Compute the interpolated elevation and gradient for a point in the terrain
-    fn elevgrad(self: Terrain, point: Vector2) elevgrad_result {
-        const point_co = point.cellOffset();
-        const cell = point_co.cell;
-        const offset = point_co.offset;
-
-        // do some bounds checking
-        const n: usize = @intCast(cell.y);
-        const s: usize = if (n + 1 < self.height) n + 1 else n;
-        const w: usize = @intCast(cell.x);
-        const e: usize = if (w + 1 < self.width) w + 1 else w;
-
-        const nw = self.getElevation(n, w);
-        const ne = self.getElevation(n, e);
-        const sw = self.getElevation(s, w);
-        const se = self.getElevation(s, e);
-
-        // compute interpolated elevation
-        const elev = nw * (1 - offset.x) * (1 - offset.y) +
-            ne * offset.x * (1 - offset.y) +
-            sw * (1 - offset.x) * offset.y +
-            se * offset.x * offset.y;
-
-        // compute slope at point (gradient)
-        const grad = .{
-            .x = (ne - nw) * (1 - offset.y) + (se - sw) * offset.y,
-            .y = (sw - nw) * (1 - offset.x) + (se - ne) * offset.x,
-        };
-
-        return .{
-            .elevation = elev,
-            .gradient = grad,
-        };
-    }
-
-    fn modifyElevation(self: *Terrain, point: Vector2, delta: f32) void {
-        const point_co = point.cellOffset();
-        const cell = point_co.cell;
-        const offset = point_co.offset;
-
-        // do some bounds checking
-        const n: usize = @intCast(cell.y);
-        const s: usize = if (n + 1 < self.height) n + 1 else n;
-        const w: usize = @intCast(cell.x);
-        const e: usize = if (w + 1 < self.width) w + 1 else w;
-
-        // distribute dH across four cornering cells
-        const nw = self.getElevation(n, w);
-        const ne = self.getElevation(n, e);
-        const sw = self.getElevation(s, w);
-        const se = self.getElevation(s, e);
-        self.setElevation(n, w, nw + delta * (1 - offset.x) * (1 - offset.y));
-        self.setElevation(n, e, ne + delta * offset.x * (1 - offset.y));
-        self.setElevation(s, w, sw + delta * (1 - offset.x) * offset.y);
-        self.setElevation(s, e, se + delta * offset.x * offset.y);
     }
 };
 
