@@ -10,10 +10,10 @@ const fnl = @cImport({
 const vectors = @import("vector.zig");
 const Vector2 = vectors.Vector2;
 
-const MeshGrid = @import("mesh_grid.zig").MeshGrid;
+const ScalarField = @import("fields.zig").ScalarField;
 
 pub const Terrain = struct {
-    elevation: MeshGrid(f32),
+    elevation: ScalarField,
     width: usize,
     height: usize,
     erosion_iters: i32 = 0,
@@ -22,7 +22,7 @@ pub const Terrain = struct {
 
     pub fn init(width: usize, height: usize, allocator: std.mem.Allocator) !Terrain {
         return .{
-            .elevation = try MeshGrid(f32).init(width, height, allocator),
+            .elevation = try ScalarField.init(width, height, allocator),
             .width = width,
             .height = height,
             .allocator = allocator,

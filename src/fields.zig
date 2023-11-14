@@ -1,8 +1,9 @@
 const std = @import("std");
 const Vector2 = @import("vector.zig").Vector2;
 
-/// 2D grid of linearly interpolated values
-pub fn MeshGrid(comptime T: type) type {
+pub const ScalarField = Field(f32);
+
+fn Field(comptime T: type) type {
     return struct {
         const Self = @This();
 
@@ -41,12 +42,12 @@ pub fn MeshGrid(comptime T: type) type {
         }
 
         pub fn get(self: Self, pos: Vector2) T {
-            const pt = MeshPoint.init(self, pos);
+            const pt = FieldPoint.init(self, pos);
 
-            const nw = self.data[self.index(pt.x0, pt.y0)];
-            const ne = self.data[self.index(pt.x1, pt.y0)];
-            const sw = self.data[self.index(pt.x0, pt.y1)];
-            const se = self.data[self.index(pt.x1, pt.y1)];
+            const nw = self.getCell(pt.x0, pt.y0);
+            const ne = self.getCell(pt.x1, pt.y0);
+            const sw = self.getCell(pt.x0, pt.y1);
+            const se = self.getCell(pt.x1, pt.y1);
 
             return nw * (1 - pt.offset.x) * (1 - pt.offset.y) +
                 ne * pt.offset.x * (1 - pt.offset.y) +
@@ -55,12 +56,12 @@ pub fn MeshGrid(comptime T: type) type {
         }
 
         pub fn gradient(self: Self, pos: Vector2) Vector2 {
-            const pt = MeshPoint.init(self, pos);
+            const pt = FieldPoint.init(self, pos);
 
-            const nw = self.data[self.index(pt.x0, pt.y0)];
-            const ne = self.data[self.index(pt.x1, pt.y0)];
-            const sw = self.data[self.index(pt.x0, pt.y1)];
-            const se = self.data[self.index(pt.x1, pt.y1)];
+            const nw = self.getCell(pt.x0, pt.y0);
+            const ne = self.getCell(pt.x1, pt.y0);
+            const sw = self.getCell(pt.x0, pt.y1);
+            const se = self.getCell(pt.x1, pt.y1);
 
             return .{
                 .x = (ne - nw) * (1 - pt.offset.y) + (se - sw) * pt.offset.y,
@@ -69,7 +70,7 @@ pub fn MeshGrid(comptime T: type) type {
         }
 
         pub fn modify(self: *Self, pos: Vector2, delta: T) void {
-            const pt = MeshPoint.init(self.*, pos);
+            const pt = FieldPoint.init(self.*, pos);
 
             const nw = self.getCell(pt.x0, pt.y0);
             const ne = self.getCell(pt.x1, pt.y0);
@@ -82,7 +83,7 @@ pub fn MeshGrid(comptime T: type) type {
             self.setCell(pt.x1, pt.y1, se + delta * pt.offset.x * pt.offset.y);
         }
 
-        const MeshPoint = struct {
+        const FieldPoint = struct {
             y0: usize,
             y1: usize,
             x0: usize,
