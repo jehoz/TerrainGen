@@ -43,30 +43,4 @@ pub const Vector2 = struct {
             return self.scale(1 / len);
         }
     }
-
-    /// Split a vector into integral (cell) and fractional (offset) parts for
-    /// each of its dimentions.
-    pub fn cellOffset(self: Vector2) CellOffset2 {
-        const modf_x = std.math.modf(self.x);
-        const modf_y = std.math.modf(self.y);
-
-        return .{
-            .cell = .{
-                .x = @intFromFloat(modf_x.ipart),
-                .y = @intFromFloat(modf_y.ipart),
-            },
-            .offset = .{
-                .x = modf_x.fpart,
-                .y = modf_y.fpart,
-            },
-        };
-    }
-};
-
-pub const CellOffset2 = struct {
-    cell: struct {
-        x: i32,
-        y: i32,
-    },
-    offset: Vector2,
 };
