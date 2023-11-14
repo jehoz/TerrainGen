@@ -7,7 +7,7 @@ const fnl = @cImport({
     @cInclude("FastNoiseLite.h");
 });
 
-const vectors = @import("vectors.zig");
+const vectors = @import("vector.zig");
 const Vector2 = vectors.Vector2;
 
 const MeshGrid = @import("mesh_grid.zig").MeshGrid;

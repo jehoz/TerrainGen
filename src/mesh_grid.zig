@@ -1,5 +1,5 @@
 const std = @import("std");
-const Vector2 = @import("vectors.zig").Vector2;
+const Vector2 = @import("vector.zig").Vector2;
 
 /// 2D grid of linearly interpolated values
 pub fn MeshGrid(comptime T: type) type {
