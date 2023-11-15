@@ -1,7 +1,12 @@
 const std = @import("std");
-const Vector2 = @import("vectors.zig").Vector2;
+
+const vectors = @import("vectors.zig");
+const Vector2 = vectors.Vector2;
+const Vector3 = vectors.Vector3;
 
 pub const ScalarField = Field(f32);
+pub const Vector2Field = Field(Vector2);
+pub const Vector3Field = Field(Vector3);
 
 fn Field(comptime T: type) type {
     return struct {
@@ -49,10 +54,24 @@ fn Field(comptime T: type) type {
             const sw = self.getCell(pt.x0, pt.y1);
             const se = self.getCell(pt.x1, pt.y1);
 
-            return nw * (1 - pt.offset.x) * (1 - pt.offset.y) +
-                ne * pt.offset.x * (1 - pt.offset.y) +
-                sw * (1 - pt.offset.x) * pt.offset.y +
-                se * pt.offset.x * pt.offset.y;
+            switch (T) {
+                f32 => {
+                    return nw * (1 - pt.offset.x) * (1 - pt.offset.y) +
+                        ne * pt.offset.x * (1 - pt.offset.y) +
+                        sw * (1 - pt.offset.x) * pt.offset.y +
+                        se * pt.offset.x * pt.offset.y;
+                },
+                Vector2, Vector3 => {
+                    const nw_part = nw.scale((1 - pt.offset.x) * (1 - pt.offset.y));
+                    const ne_part = sw.scale(pt.offset.x * (1 - pt.offset.y));
+                    const sw_part = ne.scale((1 - pt.offset.x) * pt.offset.y);
+                    const se_part = ne.scale(pt.offset.x * pt.offset.y);
+                    return nw_part.add(ne_part).add(sw_part).add(se_part);
+                },
+                else => {
+                    @compileError("`get` not implemented for fields of type " ++ @typeName(T));
+                },
+            }
         }
 
         pub fn gradient(self: Self, pos: Vector2) Vector2 {
@@ -63,10 +82,17 @@ fn Field(comptime T: type) type {
             const sw = self.getCell(pt.x0, pt.y1);
             const se = self.getCell(pt.x1, pt.y1);
 
-            return .{
-                .x = (ne - nw) * (1 - pt.offset.y) + (se - sw) * pt.offset.y,
-                .y = (sw - nw) * (1 - pt.offset.x) + (se - ne) * pt.offset.x,
-            };
+            switch (T) {
+                f32 => {
+                    return .{
+                        .x = (ne - nw) * (1 - pt.offset.y) + (se - sw) * pt.offset.y,
+                        .y = (sw - nw) * (1 - pt.offset.x) + (se - ne) * pt.offset.x,
+                    };
+                },
+                else => {
+                    @compileError("`gradient` not implemented for fields of type " ++ @typeName(T));
+                },
+            }
         }
 
         pub fn modify(self: *Self, pos: Vector2, delta: T) void {
@@ -77,10 +103,27 @@ fn Field(comptime T: type) type {
             const sw = self.getCell(pt.x0, pt.y1);
             const se = self.getCell(pt.x1, pt.y1);
 
-            self.setCell(pt.x0, pt.y0, nw + delta * (1 - pt.offset.x) * (1 - pt.offset.y));
-            self.setCell(pt.x1, pt.y0, ne + delta * pt.offset.x * (1 - pt.offset.y));
-            self.setCell(pt.x0, pt.y1, sw + delta * (1 - pt.offset.x) * pt.offset.y);
-            self.setCell(pt.x1, pt.y1, se + delta * pt.offset.x * pt.offset.y);
+            switch (T) {
+                f32 => {
+                    self.setCell(pt.x0, pt.y0, nw + delta * (1 - pt.offset.x) * (1 - pt.offset.y));
+                    self.setCell(pt.x1, pt.y0, ne + delta * pt.offset.x * (1 - pt.offset.y));
+                    self.setCell(pt.x0, pt.y1, sw + delta * (1 - pt.offset.x) * pt.offset.y);
+                    self.setCell(pt.x1, pt.y1, se + delta * pt.offset.x * pt.offset.y);
+                },
+                Vector2, Vector3 => {
+                    const nw_part = delta.scale((1 - pt.offset.x) * (1 - pt.offset.y));
+                    const ne_part = delta.scale(pt.offset.x * (1 - pt.offset.y));
+                    const sw_part = delta.scale((1 - pt.offset.x) * pt.offset.y);
+                    const se_part = delta.scale(pt.offset.x * pt.offset.y);
+                    self.setCell(pt.x0, pt.y0, nw.add(nw_part));
+                    self.setCell(pt.x1, pt.y0, ne.add(ne_part));
+                    self.setCell(pt.x0, pt.y1, sw.add(sw_part));
+                    self.setCell(pt.x1, pt.y1, se.add(se_part));
+                },
+                else => {
+                    @compileError("`modify` not implemented for fields of type " ++ @typeName(T));
+                },
+            }
         }
 
         const FieldPoint = struct {
