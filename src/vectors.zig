@@ -42,12 +42,16 @@ fn VecOps(comptime T: type) type {
             return out;
         }
 
-        pub inline fn length(self: T) f32 {
+        pub inline fn lengthSq(self: T) f32 {
             var sum: f32 = 0;
             inline for (fields) |f| {
                 sum += @field(self, f.name) * @field(self, f.name);
             }
-            return @sqrt(sum);
+            return sum;
+        }
+
+        pub inline fn length(self: T) f32 {
+            return @sqrt(self.lengthSq());
         }
 
         pub inline fn normalize(self: T) T {
