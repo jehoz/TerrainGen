@@ -33,6 +33,7 @@ pub fn main() !void {
     var scene = try TerrainScene.init(256, 256, allocator);
     defer scene.deinit();
 
+    rl.SetTraceLogLevel(rl.LOG_WARNING);
     while (!rl.WindowShouldClose()) {
         rl.UpdateCamera(&camera, rl.CAMERA_ORBITAL);
         scene.update();
@@ -75,6 +76,8 @@ const TerrainScene = struct {
         var noise = fnl.fnlCreateState();
         noise.noise_type = fnl.FNL_NOISE_OPENSIMPLEX2S;
         noise.fractal_type = fnl.FNL_FRACTAL_RIDGED;
+        noise.gain = 0.5;
+        noise.octaves = 4;
         noise.frequency = 0.01 / (@as(f32, @floatFromInt(width)) / 128);
 
         var terrain = try allocator.create(Terrain);
@@ -116,18 +119,7 @@ const TerrainScene = struct {
         var hnd = try std.Thread.spawn(
             .{ .allocator = allocator },
             Terrain.erode,
-            .{
-                scn.terrain,
-                .{
-                    .iterations = 200_000,
-                    .inertia = 0.05,
-                    .erosion_rate = 0.05,
-                    .deposition_rate = 0.5,
-                    .evaporation_rate = 0.02,
-                    .sediment_capacity = 10,
-                    .gravity = 10,
-                },
-            },
+            .{ scn.terrain, .{} },
         );
         hnd.detach();
 
