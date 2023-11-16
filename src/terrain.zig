@@ -10,7 +10,8 @@ const fnl = @cImport({
 const vectors = @import("vectors.zig");
 const Vector2 = vectors.Vector2;
 
-const ScalarField = @import("fields.zig").ScalarField;
+const fields = @import("fields.zig");
+const ScalarField = fields.ScalarField;
 
 pub const Terrain = struct {
     elevation: ScalarField,
@@ -77,77 +78,38 @@ pub const Terrain = struct {
         var random = prng.random();
 
         for (0..@intCast(opts.iterations)) |_| {
-            // spawn water droplet in random location
-            const x = random.float(f32) * @as(f32, @floatFromInt(self.width));
-            const y = random.float(f32) * @as(f32, @floatFromInt(self.height));
+            var drop = WaterParticle.init(.{
+                .x = random.float(f32) * @as(f32, @floatFromInt(self.width)),
+                .y = random.float(f32) * @as(f32, @floatFromInt(self.height)),
+            });
 
-            var drop = WaterParticle.init(x, y);
+            while (drop.volume > opts.min_volume) {
+                const initial_position = drop.position;
 
-            for (0..@intCast(opts.max_particle_lifetime)) |_| {
-                // save initial position for later
-                const pos_initial = drop.position;
-
-                const initial_elev = self.elevation.get(drop.position);
                 const gradient = self.elevation.gradient(drop.position);
+                drop.velocity = drop.velocity.scale(1 - opts.friction)
+                    .subtract(gradient.scale(opts.gravity * drop.volume));
 
-                drop.direction = drop.direction
-                    .scale(opts.inertia)
-                    .subtract(gradient.scale(1 - opts.inertia))
-                    .normalize();
+                drop.position = drop.position.add(drop.velocity.normalize());
 
-                // always move droplet one unit forward regardless of speed
-                drop.position = drop.position.add(drop.direction);
-
-                // exit early if drop is out of bounds
-                if (drop.position.x < 0 or
+                if (drop.position.x < 0 or drop.position.y < 0 or
                     drop.position.x >= @as(f32, @floatFromInt(self.width)) or
-                    drop.position.y < 0 or
                     drop.position.y >= @as(f32, @floatFromInt(self.height)))
                 {
                     break;
                 }
 
-                // compute change in elevation
-                const final_elev = self.elevation.get(drop.position);
-                const delta_elev = final_elev - initial_elev;
-
-                // maximum sediment higher when moving fast downhill or large volume
-                const max_sed = @max(
-                    -delta_elev * drop.speed * drop.volume * opts.sediment_capacity,
-                    opts.min_sediment_capacity,
+                const delta_elev = self.elevation.get(drop.position) - self.elevation.get(initial_position);
+                const max_sediment = @max(
+                    drop.velocity.length() * drop.volume * -delta_elev * opts.sediment_capacity,
+                    0,
                 );
 
-                var delta_sed: f32 = 0;
-                if (delta_elev > 0) {
-                    // if moving uphill, try to fill up to current height
-                    delta_sed = @min(delta_elev, drop.sediment);
-                } else if (drop.sediment > max_sed) {
-                    // if too much sediment, deposit as much as possible
-                    delta_sed = (drop.sediment - max_sed) * opts.deposition_rate;
-                } else {
-                    // otherwise erode sediment
-                    delta_sed = -@min(
-                        (max_sed - drop.sediment) * opts.erosion_rate,
-                        -delta_elev,
-                    );
-                }
+                const delta_sed = (drop.sediment - max_sediment) * opts.mass_transfer_rate;
                 drop.sediment -= delta_sed;
-                self.elevation.modify(pos_initial, delta_sed);
+                self.elevation.modify(initial_position, delta_sed);
 
-                // update water particle's speed and volume
-                drop.speed = @sqrt(
-                    std.math.clamp(
-                        drop.speed * drop.speed + delta_elev * opts.gravity,
-                        0,
-                        1,
-                    ),
-                );
                 drop.volume *= 1 - opts.evaporation_rate;
-
-                // exit early if stopped moving
-                if (drop.speed == 0) {
-                    break;
-                }
             }
             self.erosion_iters += 1;
         }
@@ -156,30 +118,21 @@ pub const Terrain = struct {
 
 const WaterParticle = struct {
     position: Vector2,
-    direction: Vector2,
-    speed: f32,
-    volume: f32,
-    sediment: f32,
+    velocity: Vector2 = .{ .x = 0, .y = 0 },
+    volume: f32 = 1,
+    sediment: f32 = 0,
 
-    pub fn init(x: f32, y: f32) WaterParticle {
-        return .{
-            .position = .{ .x = x, .y = y },
-            .direction = .{ .x = 0, .y = 0 },
-            .speed = 1,
-            .volume = 1,
-            .sediment = 0,
-        };
+    pub fn init(pos: Vector2) WaterParticle {
+        return .{ .position = pos };
     }
 };
 
 pub const ErosionOptions = struct {
-    iterations: i32 = 10_000,
-    max_particle_lifetime: i32 = 64,
-    inertia: f32 = 0.05,
-    sediment_capacity: f32 = 4,
-    min_sediment_capacity: f32 = 0.01,
-    erosion_rate: f32 = 0.01,
-    deposition_rate: f32 = 0.2,
-    evaporation_rate: f32 = 0.02,
-    gravity: f32 = 15,
+    iterations: i32 = 50_000,
+    min_volume: f32 = 0.01,
+    mass_transfer_rate: f32 = 0.1,
+    sediment_capacity: f32 = 10,
+    evaporation_rate: f32 = 0.01,
+    friction: f32 = 0.05,
+    gravity: f32 = 10,
 };
