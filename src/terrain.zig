@@ -74,7 +74,6 @@ pub const Terrain = struct {
 
             while (drop.volume > opts.min_volume) {
                 const initial_position = drop.position;
-                const initial_speed = drop.velocity.length();
 
                 const gradient = self.elevation.gradient(drop.position);
                 drop.velocity = drop.velocity.scale(1 - opts.friction)
@@ -88,30 +87,33 @@ pub const Terrain = struct {
                     break;
                 }
 
-                self.moisture.modify(
-                    drop.position,
-                    @max(0, initial_speed - drop.velocity.length()) * drop.volume,
-                );
-
-                const delta_elev = self.elevation.get(drop.position) - self.elevation.get(initial_position);
-                const max_sediment = @max(
-                    drop.velocity.length() * drop.volume * -delta_elev * opts.sediment_capacity,
-                    0,
-                );
-
                 const delta_sed = ret: {
+                    const delta_elev = self.elevation.get(drop.position) - self.elevation.get(initial_position);
                     if (delta_elev > 0) {
                         break :ret @min(delta_elev, drop.sediment);
                     } else {
+                        const max_sediment = @max(
+                            drop.velocity.length() * drop.volume * -delta_elev * opts.sediment_capacity,
+                            0,
+                        );
                         break :ret (drop.sediment - max_sediment) * opts.mass_transfer_rate;
                     }
                 };
-
                 drop.sediment -= delta_sed;
                 self.elevation.modify(initial_position, delta_sed);
 
-                drop.volume *= 1 - opts.evaporation_rate;
+                self.moisture.modify(drop.position, delta_moist: {
+                    const inv_speed = @max(0, 1 - drop.velocity.length());
+                    const inv_saturation = @max(0, 1 - self.moisture.get(drop.position));
+                    break :delta_moist inv_speed * inv_saturation * drop.volume * opts.soil_permeability;
+                });
+                drop.volume *= 1 - opts.droplet_evaporation;
             }
+
+            for (self.moisture.data, 0..) |_, i| {
+                self.moisture.data[i] *= 1 - opts.soil_evaporation;
+            }
+
             self.erosion_iters += 1;
         }
     }
@@ -129,11 +131,15 @@ const WaterParticle = struct {
 };
 
 pub const ErosionOptions = struct {
-    iterations: i32 = 50_000,
+    iterations: i32 = 75_000,
+
     min_volume: f32 = 0.01,
-    mass_transfer_rate: f32 = 0.1,
+    mass_transfer_rate: f32 = 0.05,
     sediment_capacity: f32 = 10,
-    evaporation_rate: f32 = 0.01,
-    friction: f32 = 0.01,
-    gravity: f32 = 8,
+    droplet_evaporation: f32 = 0.01,
+    friction: f32 = 0.025,
+    gravity: f32 = 10,
+
+    soil_evaporation: f32 = 0.001,
+    soil_permeability: f32 = 0.15,
 };
