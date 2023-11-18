@@ -159,14 +159,6 @@ const TerrainScene = struct {
         var wetmap = rl.GenImageColor(width, height, rl.BLACK);
         defer rl.UnloadImage(wetmap);
 
-        var max_moisture: f32 = 0;
-        for (0..@intCast(height)) |y| {
-            for (0..@intCast(width)) |x| {
-                const m = self.terrain.moisture.getCell(x, y);
-                if (m > max_moisture) max_moisture = m;
-            }
-        }
-
         for (0..@intCast(height)) |y| {
             for (0..@intCast(width)) |x| {
                 // encode the values in all three channels of an RGB pixel so
@@ -182,7 +174,6 @@ const TerrainScene = struct {
                 rl.ImageDrawPixel(&heightmap, @intCast(x), @intCast(y), e_col);
 
                 var moist = self.terrain.moisture.getCell(x, y);
-                if (max_moisture > 1) moist /= max_moisture;
                 const m: u32 = @intFromFloat(std.math.clamp(moist, 0, 1) * 0xFFFFFF);
                 const m_col = rl.Color{
                     .r = @truncate(m >> 16),
