@@ -104,7 +104,8 @@ pub const Terrain = struct {
 
                 self.moisture.modify(drop.position, delta_moist: {
                     const inv_speed = @max(0, 1 - drop.velocity.length());
-                    const inv_saturation = @max(0, 1 - self.moisture.get(drop.position));
+                    var inv_saturation = @max(0, 1 - self.moisture.get(drop.position));
+                    inv_saturation *= inv_saturation;
                     break :delta_moist inv_speed * inv_saturation * drop.volume * opts.soil_permeability;
                 });
                 drop.volume *= 1 - opts.droplet_evaporation;
@@ -131,15 +132,16 @@ const WaterParticle = struct {
 };
 
 pub const ErosionOptions = struct {
-    iterations: i32 = 75_000,
+    iterations: i32 = 100_000,
 
     min_volume: f32 = 0.01,
     mass_transfer_rate: f32 = 0.05,
     sediment_capacity: f32 = 10,
     droplet_evaporation: f32 = 0.01,
-    friction: f32 = 0.025,
-    gravity: f32 = 10,
 
-    soil_evaporation: f32 = 0.001,
-    soil_permeability: f32 = 0.15,
+    friction: f32 = 0.05,
+    gravity: f32 = 12,
+
+    soil_evaporation: f32 = 0.00025,
+    soil_permeability: f32 = 0.2,
 };
