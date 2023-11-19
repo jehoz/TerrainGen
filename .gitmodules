@@ -4,3 +4,6 @@
 [submodule "libs/FastNoiseLite"]
 	path = libs/FastNoiseLite
 	url = git@github.com:jehoz/FastNoiseLite.git
+[submodule "libs/lygia"]
+	path = libs/lygia
+	url = https://github.com/patriciogonzalezvivo/lygia.git
