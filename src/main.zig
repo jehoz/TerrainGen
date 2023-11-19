@@ -21,10 +21,10 @@ pub fn main() !void {
     rl.SetTargetFPS(60);
 
     var camera: rl.Camera = .{
-        .position = .{ .x = 18, .y = 21, .z = 18 },
+        .position = .{ .x = 20, .y = 30, .z = 20 },
         .target = .{ .x = 0, .y = 0, .z = 0 },
         .up = .{ .x = 0, .y = 1, .z = 0 },
-        .fovy = 45,
+        .fovy = 30,
         .projection = rl.CAMERA_PERSPECTIVE,
     };
 
@@ -35,7 +35,7 @@ pub fn main() !void {
 
     rl.SetTraceLogLevel(rl.LOG_WARNING);
     while (!rl.WindowShouldClose()) {
-        rl.UpdateCamera(&camera, rl.CAMERA_ORBITAL);
+        rl.UpdateCamera(&camera, rl.CAMERA_THIRD_PERSON);
         scene.update();
 
         rl.BeginDrawing();
@@ -79,7 +79,7 @@ const TerrainScene = struct {
         noise.noise_type = fnl.FNL_NOISE_OPENSIMPLEX2S;
         noise.fractal_type = fnl.FNL_FRACTAL_RIDGED;
         noise.gain = 0.5;
-        noise.octaves = 4;
+        noise.octaves = 6;
         noise.frequency = 0.01 / (@as(f32, @floatFromInt(width)) / 128);
 
         var terrain = try allocator.create(Terrain);
@@ -104,7 +104,7 @@ const TerrainScene = struct {
         // geometry... might be a bug
         var mesh = rl.GenMeshHeightmap(
             rl.GenImageColor(@intCast(width), @intCast(height), rl.BLACK),
-            .{ .x = 16, .y = 1, .z = 16 },
+            .{ .x = 16, .y = 0, .z = 16 },
         );
         var model = rl.LoadModelFromMesh(mesh);
 
@@ -150,7 +150,6 @@ const TerrainScene = struct {
     }
 
     pub fn update(self: *TerrainScene) void {
-        // render height and moisture maps
         const width = self.heightmap_texture.width;
         const height = self.heightmap_texture.height;
 
