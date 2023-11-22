@@ -74,41 +74,39 @@ pub const Terrain = struct {
             });
 
             while (drop.volume > opts.min_volume) {
-                const initial_position = drop.position;
+                const init_pos = drop.position;
 
-                const gradient = self.elevation.gradient(drop.position);
-                drop.velocity = drop.velocity.scale(1 - opts.friction)
-                    .subtract(gradient.scale(opts.gravity * drop.volume));
+                // Movement
+                const grav_force = self.elevation.gradient(drop.position).scale(opts.gravity);
+                drop.velocity = drop.velocity.scale(1 - opts.friction).subtract(grav_force);
 
                 drop.position = drop.position.add(drop.velocity.normalize());
-
                 if (drop.position.x < 0 or drop.position.x >= width_f or
                     drop.position.y < 0 or drop.position.y >= height_f)
                 {
                     break;
                 }
 
-                const delta_sed = ret: {
-                    const delta_elev = self.elevation.get(drop.position) - self.elevation.get(initial_position);
-                    if (delta_elev > 0) {
-                        break :ret @min(delta_elev, drop.sediment);
-                    } else {
-                        const max_sediment = @max(
-                            drop.velocity.length() * drop.volume * -delta_elev * opts.sediment_capacity,
-                            0,
-                        );
-                        break :ret (drop.sediment - max_sediment) * opts.mass_transfer_rate;
-                    }
-                };
-                drop.sediment -= delta_sed;
-                self.elevation.modify(initial_position, delta_sed);
+                // Sediment transfer
+                const delta_elev = self.elevation.get(drop.position) - self.elevation.get(init_pos);
+                var max_sed = drop.velocity.length() * drop.volume * opts.sediment_capacity;
+                var delta_sed = smaller(delta_elev, max_sed - drop.sediment) * opts.sediment_transfer_rate * 0.5;
+                // delta_sed *= self.moisture.get(init_pos);
 
+                drop.sediment -= delta_sed;
+
+                if (delta_sed > 0) delta_sed *= 3;
+                self.elevation.modify(init_pos, delta_sed);
+
+                // Soil moisture
                 self.moisture.modify(drop.position, delta_moist: {
-                    const inv_speed = @max(0, 1 - drop.velocity.length());
+                    const inv_speed = @max(0, 1 - drop.velocity.lengthSq()) / 2;
                     var inv_saturation = @max(0, 1 - self.moisture.get(drop.position));
                     inv_saturation *= inv_saturation;
-                    break :delta_moist inv_speed * inv_saturation * drop.volume * opts.soil_permeability;
+                    break :delta_moist inv_speed * inv_saturation * drop.volume * opts.soil_absorption;
                 });
+
+                // Evaporate
                 drop.volume *= 1 - opts.droplet_evaporation;
             }
 
@@ -143,7 +141,7 @@ pub const ErosionOptions = struct {
     iterations: i32 = 100_000,
 
     min_volume: f32 = 0.01,
-    mass_transfer_rate: f32 = 0.05,
+    sediment_transfer_rate: f32 = 0.75,
     sediment_capacity: f32 = 10,
     droplet_evaporation: f32 = 0.01,
 
@@ -151,5 +149,14 @@ pub const ErosionOptions = struct {
     gravity: f32 = 12,
 
     soil_evaporation: f32 = 0.00025,
-    soil_permeability: f32 = 0.2,
+    soil_absorption: f32 = 0.25,
 };
+
+/// Returns whichever of the two arguments is closer to 0.
+fn smaller(x: anytype, y: anytype) @TypeOf(x, y) {
+    if (@fabs(x) < @fabs(y)) {
+        return x;
+    } else {
+        return y;
+    }
+}
