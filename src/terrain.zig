@@ -66,6 +66,7 @@ pub const Terrain = struct {
         const width_f = @as(f32, @floatFromInt(self.width));
         const height_f = @as(f32, @floatFromInt(self.height));
 
+        var timer = std.time.Timer.start() catch null;
         for (0..@intCast(opts.iterations)) |_| {
             var drop = WaterParticle.init(.{
                 .x = random.float(f32) * width_f,
@@ -116,6 +117,13 @@ pub const Terrain = struct {
             }
 
             self.erosion_iters += 1;
+        }
+
+        if (timer) |*t| {
+            std.debug.print("Completed {} iterations in {} seconds.\n", .{
+                self.erosion_iters,
+                @as(f64, @floatFromInt(t.read())) / 1e9,
+            });
         }
     }
 };
