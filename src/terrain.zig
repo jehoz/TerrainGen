@@ -68,7 +68,7 @@ pub const Terrain = struct {
 
         var timer = std.time.Timer.start() catch null;
         for (0..@intCast(opts.iterations)) |_| {
-            var drop = WaterParticle.init(.{
+            var drop = WaterDroplet.init(.{
                 .x = random.float(f32) * width_f,
                 .y = random.float(f32) * height_f,
             });
@@ -128,13 +128,13 @@ pub const Terrain = struct {
     }
 };
 
-const WaterParticle = struct {
+const WaterDroplet = struct {
     position: Vector2,
     velocity: Vector2 = .{ .x = 0, .y = 0 },
     volume: f32 = 1,
     sediment: f32 = 0,
 
-    pub fn init(pos: Vector2) WaterParticle {
+    pub fn init(pos: Vector2) WaterDroplet {
         return .{ .position = pos };
     }
 };
