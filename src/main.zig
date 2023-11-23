@@ -2,8 +2,8 @@ const std = @import("std");
 const rl = @cImport({
     @cInclude("raylib.h");
 });
-const rg = @cImport({
-    @cInclude("raygui.h");
+const rm = @cImport({
+    @cInclude("raymath.h");
 });
 const fnl = @cImport({
     @cInclude("FastNoiseLite.h");
@@ -34,6 +34,7 @@ pub fn main() !void {
     defer scene.deinit();
 
     rl.SetTraceLogLevel(rl.LOG_WARNING);
+    var frame: u32 = 0;
     while (!rl.WindowShouldClose()) {
         rl.UpdateCamera(&camera, rl.CAMERA_THIRD_PERSON);
         scene.update();
@@ -47,6 +48,9 @@ pub fn main() !void {
         scene.render();
         rl.EndMode3D();
 
+        // const fpath = try std.fmt.allocPrintZ(allocator, "screenshots/{d}.png", .{frame});
+        // rl.TakeScreenshot(fpath.ptr);
+
         rl.DrawText(
             rl.TextFormat("Erosion Iterations: %d", scene.terrain.erosion_iters),
             20,
@@ -55,6 +59,7 @@ pub fn main() !void {
             rl.LIGHTGRAY,
         );
         rl.DrawFPS(20, 40);
+        frame += 1;
     }
 }
 
@@ -65,7 +70,7 @@ const TerrainScene = struct {
     wetmap_texture: rl.Texture,
 
     model: rl.Model,
-    model_pos: rl.Vector3,
+    instance_transforms: []rm.Matrix,
     shader: rl.Shader,
 
     allocator: std.mem.Allocator,
@@ -80,7 +85,7 @@ const TerrainScene = struct {
         noise.fractal_type = fnl.FNL_FRACTAL_RIDGED;
         noise.gain = 0.5;
         noise.octaves = 6;
-        noise.frequency = 0.01 / (@as(f32, @floatFromInt(width)) / 128);
+        noise.frequency = 0.0075 / (@as(f32, @floatFromInt(width)) / 128);
 
         var terrain = try allocator.create(Terrain);
         terrain.* = try Terrain.init(
@@ -108,10 +113,18 @@ const TerrainScene = struct {
         );
         var model = rl.LoadModelFromMesh(mesh);
 
+        var instance_transforms: []rm.Matrix = try allocator.alloc(rm.Matrix, 32);
+        for (instance_transforms, 0..) |_, i| {
+            const z_offset = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(instance_transforms.len));
+            instance_transforms[i] = rm.MatrixTranslate(-8, z_offset, -8);
+        }
+        std.debug.print("{}\n", .{instance_transforms[0]});
+
         var shader = rl.LoadShader(
             "src/shaders/heightmap.vert",
             "src/shaders/heightmap.frag",
         );
+        shader.locs[rl.SHADER_LOC_MATRIX_MODEL] = rl.GetShaderLocationAttrib(shader, "instanceTransform");
         model.materials[0].shader = shader;
         model.materials[0].maps[0].texture = heightmap_tex;
         model.materials[0].maps[1].texture = wetmap_tex;
@@ -122,7 +135,7 @@ const TerrainScene = struct {
             .wetmap_texture = wetmap_tex,
             .shader = shader,
             .model = model,
-            .model_pos = .{ .x = -8, .y = 0, .z = -8 },
+            .instance_transforms = instance_transforms,
             .allocator = allocator,
         };
 
@@ -189,7 +202,13 @@ const TerrainScene = struct {
     }
 
     pub fn render(self: *TerrainScene) void {
-        rl.DrawModel(self.model, self.model_pos, 1.0, rl.WHITE);
-        rl.DrawGrid(20, 1);
+        // rl.DrawModel(self.model, self.model_pos, 1.0, rl.WHITE);
+        // rl.DrawGrid(20, 1);
+        rl.DrawMeshInstanced(
+            self.model.meshes[0],
+            self.model.materials[0],
+            @ptrCast(self.instance_transforms),
+            @intCast(self.instance_transforms.len),
+        );
     }
 };
