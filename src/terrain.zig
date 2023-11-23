@@ -90,17 +90,20 @@ pub const Terrain = struct {
                 // Sediment transfer
                 const delta_elev = self.elevation.get(drop.position) - self.elevation.get(init_pos);
                 var max_sed = drop.velocity.length() * drop.volume * opts.sediment_capacity;
-                var delta_sed = smaller(delta_elev, max_sed - drop.sediment) * opts.sediment_transfer_rate * 0.5;
-                // delta_sed *= self.moisture.get(init_pos);
+                var delta_sed =
+                    smaller(delta_elev, max_sed - drop.sediment) *
+                    opts.sediment_transfer_rate;
+                if (delta_sed < 0) {
+                    delta_sed *= std.math.pow(f32, self.moisture.get(init_pos), opts.rock_hardness);
+                }
 
                 drop.sediment -= delta_sed;
-
-                if (delta_sed > 0) delta_sed *= 3;
+                if (delta_sed > 0) delta_sed *= opts.sediment_ratio;
                 self.elevation.modify(init_pos, delta_sed);
 
                 // Soil moisture
                 self.moisture.modify(drop.position, delta_moist: {
-                    const inv_speed = @max(0, 1 - drop.velocity.lengthSq()) / 2;
+                    const inv_speed = @max(0, 1 - drop.velocity.length());
                     var inv_saturation = @max(0, 1 - self.moisture.get(drop.position));
                     inv_saturation *= inv_saturation;
                     break :delta_moist inv_speed * inv_saturation * drop.volume * opts.soil_absorption;
@@ -138,18 +141,32 @@ const WaterDroplet = struct {
 };
 
 pub const ErosionOptions = struct {
-    iterations: i32 = 100_000,
+    /// Number of water droplets to spawn and simulate
+    iterations: i32 = 50_000,
 
+    /// Minimum volume of a water droplet before it is culled
     min_volume: f32 = 0.01,
-    sediment_transfer_rate: f32 = 0.75,
-    sediment_capacity: f32 = 10,
+    /// Scale factor for how much sediment is eroded/deposited at each time step
+    sediment_transfer_rate: f32 = 0.5,
+    /// Scale factor for the amount of sediment a droplet can hold
+    sediment_capacity: f32 = 5,
+    /// Percent volume reduction of water droplet each time step
     droplet_evaporation: f32 = 0.01,
+    /// Amount of sediment that is deposited relative to how much is eroded
+    /// by the water droplet
+    sediment_ratio: f32 = 3,
 
+    /// Percent speed reduction of water droplet each time step
     friction: f32 = 0.05,
+    /// Scale factor for how much slope affects droplet velocity
     gravity: f32 = 12,
 
+    /// Percent moisture reduction of terrain each time step
     soil_evaporation: f32 = 0.00025,
-    soil_absorption: f32 = 0.25,
+    /// Scale factor for how much moisture a droplet adds to the ground
+    soil_absorption: f32 = 0.5,
+    /// Exponent controlling how much lack of moisture reduces erosion amount
+    rock_hardness: f32 = 0.25,
 };
 
 /// Returns whichever of the two arguments is closer to 0.
