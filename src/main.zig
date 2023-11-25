@@ -27,6 +27,7 @@ pub fn main() !void {
         .fovy = 30,
         .projection = rl.CAMERA_PERSPECTIVE,
     };
+    const bg_color = rl.GetColor(0xE2EFFFFF);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var allocator = gpa.allocator();
@@ -42,7 +43,7 @@ pub fn main() !void {
         rl.BeginDrawing();
         defer rl.EndDrawing();
 
-        rl.ClearBackground(rl.BLACK);
+        rl.ClearBackground(bg_color);
 
         rl.BeginMode3D(camera);
         scene.render();
