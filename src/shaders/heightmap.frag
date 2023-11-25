@@ -10,16 +10,26 @@ uniform sampler2D texture1; // moisture
 
 out vec4 color;
 
-vec3 LIGHT_ROCK_COLOR = vec3(0.43, 0.43, 0.43);
-vec3 DARK_ROCK_COLOR = vec3(0.247,0.133,0.059);
-vec3 SAND_COLOR = vec3(0.54, 0.40, 0.30);
-vec3 GRASS_COLOR = vec3(0.1, 0.25, 0.0);
-vec3 TREE_COLOR = vec3(0.33, 0.49, 0.12);
+const vec3 COLOR_ROCK_LIGHT = vec3(0.230,0.230,0.230);
+const vec3 COLOR_ROCK_DARK = vec3(0.125,0.125,0.125);
 
-vec3 LIGHT_POSITION = vec3(0, 100, 0);
-vec4 LIGHT_COLOR = vec4(1., 1., 1., 1.);
+const vec3 COLOR_GRASS_LIGHT = vec3(0.190,0.259,0.106);
+const vec3 COLOR_GRASS_DARK = vec3(0.120,0.215,0.030);
+const vec3 COLOR_MUD = vec3(0.125,0.089,0.079);
 
-vec4 ambient = vec4(0.5, 0.5, 0.5, 1);
+const vec3 COLOR_FOLIAGE_0 = vec3(0.065,0.170,0.044);
+const vec3 COLOR_FOLIAGE_1 = vec3(0.206,0.245,0.068);
+
+const vec3 COLOR_WATER_SHALLOW = vec3(0.073,0.202,0.300);
+const vec3 COLOR_WATER_DEEP = vec3(0.040,0.068,0.210);
+
+const vec3 SUN_POSITION = vec3(25, 50, 50);
+const vec3 SUN_COLOR = vec3(1.2, 1.1, 1.0) * 0.67;
+
+const float AMBIENT_STRENGTH = 0.33;
+const vec3 AMBIENT_COLOR = vec3(0.886, 0.937, 1.0);
+
+const float WATER_THRESHOLD = 0.75;
 
 
 float decodeTexVal(sampler2D tex, vec2 uv) {
@@ -61,56 +71,76 @@ float voronoise( in vec2 p, float u, float v )
 
 void main()
 {
-    float height = decodeTexVal(texture0, f_UV);
-    float wetness = decodeTexVal(texture1, f_UV);
-
+    float noise256 = voronoise(vec2(f_UV) * 256, 1., 1.);
     float noise512 = voronoise(vec2(f_UV) * 512, 1., 1.);
 
-    if (f_instanceOffset == 0) { // base instance (terrain)  {
-        vec3 rock_color = mix(
-            LIGHT_ROCK_COLOR,
-            mix(LIGHT_ROCK_COLOR, DARK_ROCK_COLOR, noise512),
-            (wetness / 2) + 0.5
-        );
+    float height = decodeTexVal(texture0, f_UV);
 
-        vec3 soil_color = mix(
-            SAND_COLOR,
-            mix(GRASS_COLOR, GRASS_COLOR * 0.5, noise512),
-            wetness
-        );
+    // distort moisture texture a little bit to reduce pixel artifacting
+    float wetness = decodeTexVal(texture1, f_UV + vec2(noise512) * 0.0075);
+    bool isWater = wetness > WATER_THRESHOLD;
 
-        vec4 terrainColor = vec4(
-            mix(rock_color,
+    if (f_instanceOffset == 0) { // base instance (terrain)
+        vec3 terrainColor = vec3(0);
+        if (isWater) {
+            terrainColor = mix(
+                COLOR_WATER_SHALLOW,
+                COLOR_WATER_DEEP,
+                pow(smoothstep(WATER_THRESHOLD, 1., wetness), 0.75)
+            );
+        } else {
+            vec3 rock_color = mix(
+                COLOR_ROCK_LIGHT,
+                COLOR_ROCK_DARK,
+                pow(wetness, 0.75)
+            );
+            rock_color -= voronoise(vec2(height, wetness) * 32, 1., 1.) * 0.1;
+
+            float soilMoisture = smoothstep(0, WATER_THRESHOLD, wetness);
+            vec3 soil_color = mix(
+                mix(COLOR_GRASS_LIGHT, COLOR_GRASS_DARK, soilMoisture / 0.5),
+                mix(COLOR_MUD, COLOR_WATER_SHALLOW, pow(soilMoisture, 32.)),
+                soilMoisture
+            );
+
+            terrainColor = mix(
+                rock_color,
                 soil_color,
-            smoothstep(0.6, 0.9, f_normal.y)
-            ), 1);
+                smoothstep(0.6, 0.9, f_normal.y)
+            );
+        }
 
-        vec3 lightDir = normalize(LIGHT_POSITION - f_position);
-        float litAmt = max(0, dot(f_normal, lightDir));
+        // Ambient
+        vec3 ambient = AMBIENT_COLOR * AMBIENT_STRENGTH;
 
-        color = terrainColor * vec4(LIGHT_COLOR.rgb * litAmt, 1.0);
-        // color += terrainColor * (ambient / 10.0);
-        color = pow(color, vec4(1.0 / 2.2));
+        // Diffuse
+        vec3 lightDir = normalize(SUN_POSITION - f_position);
+        float litAmt = max(0.0, dot(f_normal, lightDir));
+        vec3 diffuse = SUN_COLOR * litAmt;
+
+        color = vec4((ambient + diffuse) * terrainColor, 1.0);
 
     } else {  // shells (trees)
-         if (wetness > 0.75) discard;
+        // discard;
+        if (isWater) discard;
 
-         float treeDist = noise512;
-         if (wetness < 0.50) {
-             treeDist *= voronoise(f_UV * 128, 1., 1.);
-         }
+        float treeDist = noise512;
+        if (wetness < 0.50) {
+            treeDist *= voronoise(f_UV * 128, 1., 1.);
+        }
 
-         if (treeDist * wetness * (f_normal.y + 0.1) < f_instanceOffset) {
-             discard;
-         }
+        if (treeDist * wetness * (f_normal.y + 0.1) < f_instanceOffset) {
+            discard;
+        }
 
-         color = mix(
-            vec4(GRASS_COLOR, 1),
-            vec4(TREE_COLOR, 1),
-            voronoise(f_UV * 256, 1., 1.)
+        color = mix(
+           vec4(COLOR_FOLIAGE_0, 1),
+           vec4(COLOR_FOLIAGE_1, 1),
+           voronoise(f_UV * 256, 1., 1.)
         );
+        color *= pow(f_instanceOffset, 0.5);
+    }
 
-         color *= pow(f_instanceOffset, 0.5);
-     }
-
+    // gamma correction
+    color = pow(color, vec4(1.0 / 2.2));
 }
