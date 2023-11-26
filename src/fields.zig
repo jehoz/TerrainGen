@@ -49,23 +49,18 @@ fn Field(comptime T: type) type {
         pub fn get(self: Self, pos: Vector2) T {
             const pt = FieldPoint.init(self, pos);
 
-            const nw = self.getCell(pt.x0, pt.y0);
-            const ne = self.getCell(pt.x1, pt.y0);
-            const sw = self.getCell(pt.x0, pt.y1);
-            const se = self.getCell(pt.x1, pt.y1);
-
             switch (T) {
                 f32 => {
-                    return nw * (1 - pt.offset.x) * (1 - pt.offset.y) +
-                        ne * pt.offset.x * (1 - pt.offset.y) +
-                        sw * (1 - pt.offset.x) * pt.offset.y +
-                        se * pt.offset.x * pt.offset.y;
+                    return pt.nw * (1 - pt.offset.x) * (1 - pt.offset.y) +
+                        pt.ne * pt.offset.x * (1 - pt.offset.y) +
+                        pt.sw * (1 - pt.offset.x) * pt.offset.y +
+                        pt.se * pt.offset.x * pt.offset.y;
                 },
                 Vector2, Vector3 => {
-                    const nw_part = nw.scale((1 - pt.offset.x) * (1 - pt.offset.y));
-                    const ne_part = sw.scale(pt.offset.x * (1 - pt.offset.y));
-                    const sw_part = ne.scale((1 - pt.offset.x) * pt.offset.y);
-                    const se_part = ne.scale(pt.offset.x * pt.offset.y);
+                    const nw_part = pt.nw.scale((1 - pt.offset.x) * (1 - pt.offset.y));
+                    const ne_part = pt.sw.scale(pt.offset.x * (1 - pt.offset.y));
+                    const sw_part = pt.ne.scale((1 - pt.offset.x) * pt.offset.y);
+                    const se_part = pt.ne.scale(pt.offset.x * pt.offset.y);
                     return nw_part.add(ne_part).add(sw_part).add(se_part);
                 },
                 else => {
@@ -77,16 +72,11 @@ fn Field(comptime T: type) type {
         pub fn gradient(self: Self, pos: Vector2) Vector2 {
             const pt = FieldPoint.init(self, pos);
 
-            const nw = self.getCell(pt.x0, pt.y0);
-            const ne = self.getCell(pt.x1, pt.y0);
-            const sw = self.getCell(pt.x0, pt.y1);
-            const se = self.getCell(pt.x1, pt.y1);
-
             switch (T) {
                 f32 => {
                     return .{
-                        .x = (ne - nw) * (1 - pt.offset.y) + (se - sw) * pt.offset.y,
-                        .y = (sw - nw) * (1 - pt.offset.x) + (se - ne) * pt.offset.x,
+                        .x = (pt.ne - pt.nw) * (1 - pt.offset.y) + (pt.se - pt.sw) * pt.offset.y,
+                        .y = (pt.sw - pt.nw) * (1 - pt.offset.x) + (pt.se - pt.ne) * pt.offset.x,
                     };
                 },
                 else => {
@@ -98,27 +88,22 @@ fn Field(comptime T: type) type {
         pub fn modify(self: *Self, pos: Vector2, delta: T) void {
             const pt = FieldPoint.init(self.*, pos);
 
-            const nw = self.getCell(pt.x0, pt.y0);
-            const ne = self.getCell(pt.x1, pt.y0);
-            const sw = self.getCell(pt.x0, pt.y1);
-            const se = self.getCell(pt.x1, pt.y1);
-
             switch (T) {
                 f32 => {
-                    self.setCell(pt.x0, pt.y0, nw + delta * (1 - pt.offset.x) * (1 - pt.offset.y));
-                    self.setCell(pt.x1, pt.y0, ne + delta * pt.offset.x * (1 - pt.offset.y));
-                    self.setCell(pt.x0, pt.y1, sw + delta * (1 - pt.offset.x) * pt.offset.y);
-                    self.setCell(pt.x1, pt.y1, se + delta * pt.offset.x * pt.offset.y);
+                    self.setCell(pt.x0, pt.y0, pt.nw + delta * (1 - pt.offset.x) * (1 - pt.offset.y));
+                    self.setCell(pt.x1, pt.y0, pt.ne + delta * pt.offset.x * (1 - pt.offset.y));
+                    self.setCell(pt.x0, pt.y1, pt.sw + delta * (1 - pt.offset.x) * pt.offset.y);
+                    self.setCell(pt.x1, pt.y1, pt.se + delta * pt.offset.x * pt.offset.y);
                 },
                 Vector2, Vector3 => {
                     const nw_part = delta.scale((1 - pt.offset.x) * (1 - pt.offset.y));
                     const ne_part = delta.scale(pt.offset.x * (1 - pt.offset.y));
                     const sw_part = delta.scale((1 - pt.offset.x) * pt.offset.y);
                     const se_part = delta.scale(pt.offset.x * pt.offset.y);
-                    self.setCell(pt.x0, pt.y0, nw.add(nw_part));
-                    self.setCell(pt.x1, pt.y0, ne.add(ne_part));
-                    self.setCell(pt.x0, pt.y1, sw.add(sw_part));
-                    self.setCell(pt.x1, pt.y1, se.add(se_part));
+                    self.setCell(pt.x0, pt.y0, pt.nw.add(nw_part));
+                    self.setCell(pt.x1, pt.y0, pt.ne.add(ne_part));
+                    self.setCell(pt.x0, pt.y1, pt.sw.add(sw_part));
+                    self.setCell(pt.x1, pt.y1, pt.se.add(se_part));
                 },
                 else => {
                     @compileError("`modify` not implemented for fields of type " ++ @typeName(T));
@@ -127,11 +112,23 @@ fn Field(comptime T: type) type {
         }
 
         const FieldPoint = struct {
+            /// Bounding coordinates of point
             y0: usize,
             y1: usize,
             x0: usize,
             x1: usize,
+
+            /// Relative offset from (x0, y0)
             offset: Vector2,
+
+            /// Value of cell at (x0, y0)
+            nw: T,
+            /// Value of cell at (x1, y0)
+            ne: T,
+            /// Value of cell at (x0, y1)
+            sw: T,
+            /// Value of cell at (x1, y1)
+            se: T,
 
             pub fn init(grid: Self, pos: Vector2) @This() {
                 const modf_x = std.math.modf(pos.x);
@@ -147,6 +144,10 @@ fn Field(comptime T: type) type {
                     .y1 = y1,
                     .x0 = x0,
                     .x1 = x1,
+                    .nw = grid.getCell(x0, y0),
+                    .ne = grid.getCell(x1, y0),
+                    .sw = grid.getCell(x0, y1),
+                    .se = grid.getCell(x1, y1),
                     .offset = .{ .x = modf_x.fpart, .y = modf_y.fpart },
                 };
             }
