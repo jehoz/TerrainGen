@@ -28,6 +28,7 @@ pub fn main() !void {
         .projection = rl.CAMERA_PERSPECTIVE,
     };
     const bg_color = rl.GetColor(0xE2EFFFFF);
+    const font = rl.LoadFontEx("res/iosevka-regular.ttf", 20, null, 0);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var allocator = gpa.allocator();
@@ -35,7 +36,6 @@ pub fn main() !void {
     defer scene.deinit();
 
     rl.SetTraceLogLevel(rl.LOG_WARNING);
-    var frame: u32 = 0;
     while (!rl.WindowShouldClose()) {
         rl.UpdateCamera(&camera, rl.CAMERA_THIRD_PERSON);
         scene.update();
@@ -49,18 +49,14 @@ pub fn main() !void {
         scene.render();
         rl.EndMode3D();
 
-        // const fpath = try std.fmt.allocPrintZ(allocator, "screenshots/{d}.png", .{frame});
-        // rl.TakeScreenshot(fpath.ptr);
-
-        rl.DrawText(
-            rl.TextFormat("Erosion Iterations: %d", scene.terrain.erosion_iters),
+        rl.DrawTextEx(
+            font,
+            rl.TextFormat("Water particles: %d", scene.terrain.erosion_iters),
+            .{ .x = 20, .y = 20 },
             20,
-            20,
-            20,
-            rl.LIGHTGRAY,
+            0,
+            rl.BLACK,
         );
-        rl.DrawFPS(20, 40);
-        frame += 1;
     }
 }
 
@@ -203,8 +199,6 @@ const TerrainScene = struct {
     }
 
     pub fn render(self: *TerrainScene) void {
-        // rl.DrawModel(self.model, self.model_pos, 1.0, rl.WHITE);
-        // rl.DrawGrid(20, 1);
         rl.DrawMeshInstanced(
             self.model.meshes[0],
             self.model.materials[0],
