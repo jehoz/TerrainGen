@@ -89,15 +89,11 @@ pub const Terrain = struct {
 
                 // Sediment transfer
                 const delta_elev = self.elevation.get(drop.position) - self.elevation.get(init_pos);
-                var max_sed = drop.velocity.length() * drop.volume * opts.sediment_capacity;
-                var delta_sed =
-                    smaller(delta_elev, max_sed - drop.sediment) *
-                    opts.sediment_transfer_rate;
+                var delta_sed = delta_elev * opts.sediment_transfer_rate;
                 if (delta_sed < 0) {
                     delta_sed *= std.math.pow(f32, self.moisture.get(init_pos), opts.rock_hardness);
                 }
 
-                drop.sediment -= delta_sed;
                 if (delta_sed > 0) delta_sed *= opts.sediment_ratio;
                 self.elevation.modify(init_pos, delta_sed);
 
@@ -113,6 +109,7 @@ pub const Terrain = struct {
                 drop.volume *= 1 - opts.droplet_evaporation;
             }
 
+            // Soil evaporation
             for (self.moisture.data, 0..) |_, i| {
                 self.moisture.data[i] *= 1 - opts.soil_evaporation;
             }
@@ -133,7 +130,6 @@ const WaterDroplet = struct {
     position: Vector2,
     velocity: Vector2 = .{ .x = 0, .y = 0 },
     volume: f32 = 1,
-    sediment: f32 = 0,
 
     pub fn init(pos: Vector2) WaterDroplet {
         return .{ .position = pos };
@@ -148,8 +144,6 @@ pub const ErosionOptions = struct {
     min_volume: f32 = 0.01,
     /// Scale factor for how much sediment is eroded/deposited at each time step
     sediment_transfer_rate: f32 = 0.5,
-    /// Scale factor for the amount of sediment a droplet can hold
-    sediment_capacity: f32 = 5,
     /// Percent volume reduction of water droplet each time step
     droplet_evaporation: f32 = 0.01,
     /// Amount of sediment that is deposited relative to how much is eroded
@@ -169,11 +163,3 @@ pub const ErosionOptions = struct {
     rock_hardness: f32 = 0.25,
 };
 
-/// Returns whichever of the two arguments is closer to 0.
-fn smaller(x: anytype, y: anytype) @TypeOf(x, y) {
-    if (@fabs(x) < @fabs(y)) {
-        return x;
-    } else {
-        return y;
-    }
-}
