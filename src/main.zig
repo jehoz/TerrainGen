@@ -170,6 +170,13 @@ const TerrainScene = struct {
 
         for (0..@intCast(height)) |y| {
             for (0..@intCast(width)) |x| {
+                // black out 1 pixel border so looks nice when rendering
+                if (x == 0 or x == width - 1 or y == 0 or y == height - 1) {
+                    rl.ImageDrawPixel(&heightmap, @intCast(x), @intCast(y), rl.BLACK);
+                    rl.ImageDrawPixel(&wetmap, @intCast(x), @intCast(y), rl.BLACK);
+                    continue;
+                }
+
                 // encode the values in all three channels of an RGB pixel so
                 // that we get 2^24 discrete values instead of only 256
                 const elev = self.terrain.elevation.getCell(x, y);
