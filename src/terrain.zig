@@ -102,7 +102,7 @@ pub const Terrain = struct {
                     const inv_speed = @max(0, 1 - drop.velocity.length());
                     var inv_saturation = @max(0, 1 - self.moisture.get(drop.position));
                     inv_saturation *= inv_saturation;
-                    break :delta_moist inv_speed * inv_saturation * drop.volume * opts.soil_absorption;
+                    break :delta_moist inv_speed * inv_saturation * opts.soil_absorption;
                 });
 
                 // Evaporate
