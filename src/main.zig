@@ -38,6 +38,10 @@ pub fn main() !void {
     rl.SetTraceLogLevel(rl.LOG_WARNING);
     while (!rl.WindowShouldClose()) {
         rl.UpdateCamera(&camera, rl.CAMERA_THIRD_PERSON);
+
+        if (rl.IsKeyPressed(rl.KEY_SPACE)) {
+            try scene.launchErosionThread();
+        }
         scene.update();
 
         rl.BeginDrawing();
@@ -57,11 +61,23 @@ pub fn main() !void {
             0,
             rl.BLACK,
         );
+
+        if (scene.erosion_thread == null) {
+            rl.DrawTextEx(
+                font,
+                "Press SPACE to start erosion.",
+                .{ .x = 20, .y = screen_height - 40 },
+                20,
+                0,
+                rl.BLACK,
+            );
+        }
     }
 }
 
 const TerrainScene = struct {
     terrain: *Terrain,
+    erosion_thread: ?std.Thread,
 
     heightmap_texture: rl.Texture,
     wetmap_texture: rl.Texture,
@@ -128,6 +144,7 @@ const TerrainScene = struct {
 
         var scn = .{
             .terrain = terrain,
+            .erosion_thread = null,
             .heightmap_texture = heightmap_tex,
             .wetmap_texture = wetmap_tex,
             .shader = shader,
@@ -135,13 +152,6 @@ const TerrainScene = struct {
             .instance_transforms = instance_transforms,
             .allocator = allocator,
         };
-
-        var hnd = try std.Thread.spawn(
-            .{ .allocator = allocator },
-            Terrain.erode,
-            .{ scn.terrain, .{} },
-        );
-        hnd.detach();
 
         return scn;
     }
@@ -157,6 +167,18 @@ const TerrainScene = struct {
         std.debug.print("Unloading textures\n", .{});
         rl.UnloadTexture(self.heightmap_texture);
         rl.UnloadTexture(self.wetmap_texture);
+    }
+
+    pub fn launchErosionThread(self: *TerrainScene) !void {
+        if (self.erosion_thread) |_| {
+            return;
+        } else {
+            self.erosion_thread = try std.Thread.spawn(
+                .{ .allocator = self.allocator },
+                Terrain.erode,
+                .{ self.terrain, .{} },
+            );
+        }
     }
 
     pub fn update(self: *TerrainScene) void {
