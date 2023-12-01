@@ -90,9 +90,6 @@ pub const Terrain = struct {
                 // Sediment transfer
                 const delta_elev = self.elevation.get(drop.position) - self.elevation.get(init_pos);
                 var delta_sed = delta_elev * opts.sediment_transfer_rate;
-                if (delta_sed < 0) {
-                    delta_sed *= std.math.pow(f32, self.moisture.get(init_pos), opts.rock_hardness);
-                }
 
                 if (delta_sed > 0) delta_sed *= opts.sediment_ratio;
                 self.elevation.modify(init_pos, delta_sed);
@@ -159,7 +156,4 @@ pub const ErosionOptions = struct {
     soil_evaporation: f32 = 0.00025,
     /// Scale factor for how much moisture a droplet adds to the ground
     soil_absorption: f32 = 0.5,
-    /// Exponent controlling how much lack of moisture reduces erosion amount
-    rock_hardness: f32 = 0.25,
 };
-
